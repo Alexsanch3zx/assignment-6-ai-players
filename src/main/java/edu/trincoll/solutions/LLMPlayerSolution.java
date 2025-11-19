@@ -1,7 +1,6 @@
 package edu.trincoll.solutions;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import edu.trincoll.game.command.AttackCommand;
 import edu.trincoll.game.command.GameCommand;
 import edu.trincoll.game.command.HealCommand;
@@ -17,8 +16,8 @@ import java.util.List;
  *
  * This demonstrates:
  * - TODO 1: Effective prompt engineering
- * - TODO 2: Spring AI ChatClient usage
- * - TODO 3: Robust JSON parsing with error handling
+ * - TODO 2: Spring AI ChatClient usage with .entity() for automatic deserialization
+ * - TODO 3: Converting Decision objects to GameCommands
  *
  * Design Patterns:
  * - STRATEGY: Implements Player interface with LLM-based decisions
@@ -27,13 +26,11 @@ import java.util.List;
  */
 public class LLMPlayerSolution implements Player {
     private final ChatClient chatClient;
-    private final ObjectMapper objectMapper;
     private final String modelName;
 
     public LLMPlayerSolution(ChatClient chatClient, String modelName) {
         this.chatClient = chatClient;
         this.modelName = modelName;
-        this.objectMapper = new ObjectMapper();
     }
 
     @Override
@@ -45,23 +42,12 @@ public class LLMPlayerSolution implements Player {
             // TODO 1: Build the prompt
             String prompt = buildPrompt(self, allies, enemies, gameState);
 
-            // TODO 2: Call the LLM
-            String response = chatClient.prompt()
+            // TODO 2: Call the LLM and get Decision object
+            // Spring AI automatically deserializes JSON response to Decision record
+            Decision decision = chatClient.prompt()
                 .user(prompt)
                 .call()
-                .content();
-
-            // Clean up response - remove markdown code blocks if present
-            String cleanedResponse = response.trim();
-            if (cleanedResponse.startsWith("```")) {
-                // Remove markdown code blocks
-                cleanedResponse = cleanedResponse.replaceAll("```json\\s*", "")
-                                                 .replaceAll("```\\s*", "")
-                                                 .trim();
-            }
-
-            // TODO 3: Parse the response
-            Decision decision = objectMapper.readValue(cleanedResponse, Decision.class);
+                .entity(Decision.class);
 
             // Validate the decision
             if (decision.action() == null || decision.target() == null) {
@@ -72,7 +58,8 @@ public class LLMPlayerSolution implements Player {
             // Log the LLM's reasoning
             System.out.println("[" + modelName + "] Reasoning: " + decision.reasoning());
 
-            // Find the target character
+            // TODO 3: Convert Decision to GameCommand
+            // Find the target character based on action type
             Character target = decision.action().equals("attack")
                 ? findCharacterByName(decision.target(), enemies)
                 : findCharacterByName(decision.target(), allies);
