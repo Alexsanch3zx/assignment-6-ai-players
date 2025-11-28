@@ -100,7 +100,9 @@ public class GameApplication {
             // <p>
             // Hint: Use the helper method createTeamConfiguration() below
 
-            throw new UnsupportedOperationException("TODO 6: Configure teams and start game");
+            GameController controller = createTeamConfiguration(openAiClient, anthropicClient, geminiClient);
+            controller.playGame();
+            controller.displayResult();
         };
     }
 
@@ -137,8 +139,37 @@ public class GameApplication {
             ChatClient openAiClient,
             ChatClient anthropicClient,
             ChatClient geminiClient) {
-        // TODO 6: Implement team configuration
-        throw new UnsupportedOperationException("TODO 6: Implement team configuration");
+        // Team 1: Human player + 1-2 AI players (RuleBasedPlayer)
+        Character humanWarrior = CharacterFactory.createWarrior("Conan");
+        Character aiMage = CharacterFactory.createMage("Gandalf");
+        Character aiArcher = CharacterFactory.createArcher("Robin");
+        List<Character> team1 = List.of(humanWarrior, aiMage, aiArcher);
+
+        // Team 2: Two LLM players (one OpenAI, one Anthropic)
+        Character gptArcher = CharacterFactory.createArcher("Legolas");
+        Character claudeRogue = CharacterFactory.createRogue("Shadow");
+        List<Character> team2 = List.of(gptArcher, claudeRogue);
+
+        // Map characters to their player types
+        Map<Character, Player> playerMap = new HashMap<>();
+        playerMap.put(humanWarrior, new HumanPlayer());
+        playerMap.put(aiMage, new RuleBasedPlayer());
+        playerMap.put(aiArcher, new RuleBasedPlayer());
+        playerMap.put(gptArcher, new LLMPlayer(openAiClient, "GPT-5"));
+        playerMap.put(claudeRogue, new LLMPlayer(anthropicClient, "Claude-Sonnet-4.5"));
+
+        // Display team setup
+        System.out.println("\n=== Team Setup ===");
+        System.out.println("Team 1:");
+        System.out.println("  - " + humanWarrior.getName() + " (" + humanWarrior.getType() + ") - Human controlled");
+        System.out.println("  - " + aiMage.getName() + " (" + aiMage.getType() + ") - RuleBasedAI");
+        System.out.println("  - " + aiArcher.getName() + " (" + aiArcher.getType() + ") - RuleBasedAI");
+        System.out.println("\nTeam 2:");
+        System.out.println("  - " + gptArcher.getName() + " (" + gptArcher.getType() + ") - OpenAI GPT-5");
+        System.out.println("  - " + claudeRogue.getName() + " (" + claudeRogue.getType() + ") - Anthropic Claude Sonnet 4.5");
+        System.out.println("=".repeat(60) + "\n");
+
+        return new GameController(team1, team2, playerMap);
     }
 
     /**
