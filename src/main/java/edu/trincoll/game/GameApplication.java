@@ -50,14 +50,12 @@ public class GameApplication {
      *
      * @param openAiClient ChatClient for OpenAI/GPT-5
      * @param anthropicClient ChatClient for Anthropic/Claude Sonnet 4.5
-     * @param geminiClient ChatClient for Google/Gemini 2.5 Pro
      * @return CommandLineRunner that starts the game
      */
     @Bean
     public CommandLineRunner run(
             @Qualifier("openAiChatClient") ChatClient openAiClient,
-            @Qualifier("anthropicChatClient") ChatClient anthropicClient,
-            @Qualifier("geminiChatClient") ChatClient geminiClient) {
+            @Qualifier("anthropicChatClient") ChatClient anthropicClient) {
 
         return args -> {
             System.out.println("""
@@ -100,7 +98,7 @@ public class GameApplication {
             // <p>
             // Hint: Use the helper method createTeamConfiguration() below
 
-            GameController controller = createTeamConfiguration(openAiClient, anthropicClient, geminiClient);
+            GameController controller = createTeamConfiguration(openAiClient, anthropicClient);
             controller.playGame();
             controller.displayResult();
         };
@@ -137,8 +135,7 @@ public class GameApplication {
      */
     private GameController createTeamConfiguration(
             ChatClient openAiClient,
-            ChatClient anthropicClient,
-            ChatClient geminiClient) {
+            ChatClient anthropicClient) {
         // Team 1: Human player + 1-2 AI players (RuleBasedPlayer)
         Character humanWarrior = CharacterFactory.createWarrior("Conan");
         Character aiMage = CharacterFactory.createMage("Gandalf");
@@ -180,8 +177,7 @@ public class GameApplication {
      */
     private GameController interactiveSetup(
             ChatClient openAiClient,
-            ChatClient anthropicClient,
-            ChatClient geminiClient) {
+            ChatClient anthropicClient) {
         Scanner scanner = new Scanner(System.in);
 
         System.out.println("\n=== Team Setup ===");
