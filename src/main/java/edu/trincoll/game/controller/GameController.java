@@ -68,7 +68,66 @@ public class GameController {
      * Hint: Use processTurn() helper method for each character
      */
     public void playGame() {
-        throw new UnsupportedOperationException("TODO 4: Implement game loop");
+        System.out.println("\n" + "=".repeat(60));
+        System.out.println("GAME START!");
+        System.out.println("=".repeat(60) + "\n");
+
+        // Main game loop
+        while (!isGameOver()) {
+            System.out.println("\n" + "=".repeat(60));
+            System.out.println("ROUND " + gameState.roundNumber());
+            System.out.println("=".repeat(60) + "\n");
+
+            // Team 1's turn
+            System.out.println("--- Team 1's Turn ---");
+            for (Character character : team1) {
+                if (isGameOver()) {
+                    break;
+                }
+                processTurn(character, team1, team2);
+            }
+
+            // Check if game is over after Team 1's turns
+            if (isGameOver()) {
+                break;
+            }
+
+            // Team 2's turn
+            System.out.println("\n--- Team 2's Turn ---");
+            for (Character character : team2) {
+                if (isGameOver()) {
+                    break;
+                }
+                processTurn(character, team2, team1);
+            }
+
+            // Display round summary
+            displayRoundSummary();
+
+            // Update game state for next round
+            gameState = gameState.nextRound();
+        }
+    }
+
+    /**
+     * Displays a summary of the current round.
+     */
+    private void displayRoundSummary() {
+        System.out.println("\n" + "-".repeat(60));
+        System.out.println("End of Round " + gameState.roundNumber() + " Summary");
+        System.out.println("-".repeat(60));
+
+        System.out.println("\nTeam 1 Status:");
+        for (Character c : team1) {
+            displayCharacterStatus(c);
+        }
+
+        System.out.println("\nTeam 2 Status:");
+        for (Character c : team2) {
+            displayCharacterStatus(c);
+        }
+
+        System.out.println("-".repeat(60));
     }
 
     /**
@@ -97,8 +156,21 @@ public class GameController {
             return;
         }
 
-        // TODO 5: Get player and execute their decision
-        throw new UnsupportedOperationException("TODO 5: Process character turn");
+        // 1. Get the player controlling this character
+        Player player = playerMap.get(character);
+
+        // 2. Call player.decideAction() to get a command
+        GameCommand command = player.decideAction(character, allies, enemies, gameState);
+
+        // 3. Execute the command via invoker
+        invoker.executeCommand(command);
+
+        // 4. Update game state
+        gameState = gameState.nextTurn();
+        gameState = gameState.withUndo(
+            invoker.hasCommandsToUndo(),
+            invoker.getCommandHistory().size()
+        );
     }
 
     /**
