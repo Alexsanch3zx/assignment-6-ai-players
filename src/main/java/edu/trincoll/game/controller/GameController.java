@@ -162,8 +162,10 @@ public class GameController {
         // 2. Call player.decideAction() to get a command
         GameCommand command = player.decideAction(character, allies, enemies, gameState);
 
-        // 3. Execute the command via invoker
-        invoker.executeCommand(command);
+        // 3. Execute the command via invoker (only if command is not null)
+        if (command != null) {
+            invoker.executeCommand(command);
+        }
 
         // 4. Update game state
         gameState = gameState.nextTurn();

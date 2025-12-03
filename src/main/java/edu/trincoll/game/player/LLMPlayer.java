@@ -5,6 +5,7 @@ import edu.trincoll.game.command.AttackCommand;
 import edu.trincoll.game.command.GameCommand;
 import edu.trincoll.game.command.HealCommand;
 import edu.trincoll.game.model.Character;
+import edu.trincoll.game.model.CharacterType;
 import org.springframework.ai.chat.client.ChatClient;
 
 import java.util.List;
@@ -69,7 +70,17 @@ public class LLMPlayer implements Player {
         //   "target": "character_name",
         //   "reasoning": "why this decision was made"
         // }
-        throw new UnsupportedOperationException("TODO 2: Implement LLM call and parse response");
+        Decision decision = null;
+        try {
+            decision = chatClient.prompt()
+                .user(prompt)
+                .call()
+                .entity(Decision.class);
+        } catch (Exception e) {
+            System.out.println("[" + modelName + "] Error: " + e.getMessage());
+            System.out.println("[" + modelName + "] Falling back to RuleBasedAI logic");
+            return defaultAction(self, enemies);
+        }
 
         // TODO 3: Convert Decision to GameCommand (10 points)
         // Based on the decision.action(), create the appropriate GameCommand:
@@ -78,6 +89,36 @@ public class LLMPlayer implements Player {
         //
         // Use findCharacterByName() to locate the target character
         // Hint: Use a switch expression or if-else to handle different actions
+        
+        if (decision == null || decision.action() == null || decision.target() == null) {
+            return defaultAction(self, enemies);
+        }
+
+        String action = decision.action().toLowerCase().trim();
+        String targetName = decision.target().trim();
+
+        System.out.println("[" + modelName + "] Reasoning: " + decision.reasoning());
+
+        return switch (action) {
+            case "attack" -> {
+                Character target = findCharacterByName(targetName, enemies);
+                yield new AttackCommand(self, target);
+            }
+            case "heal" -> {
+                Character target = findCharacterByName(targetName, allies);
+                yield new HealCommand(target, 30);
+            }
+            default -> defaultAction(self, enemies);
+        };
+    }
+
+    /**
+     * Default action when LLM fails or returns invalid data.
+     * Falls back to simple rule-based logic.
+     */
+    private GameCommand defaultAction(Character self, List<Character> enemies) {
+        Character weakestEnemy = getWeakestEnemy(enemies);
+        return new AttackCommand(self, weakestEnemy);
     }
 
     /**
@@ -135,9 +176,98 @@ public class LLMPlayer implements Player {
                               List<Character> allies,
                               List<Character> enemies,
                               GameState gameState) {
-        // TODO 1: Implement prompt building
-        // See method documentation above for structure
-        throw new UnsupportedOperationException("TODO 1: Build prompt for LLM");
+        // Calculate health percentages
+        double selfHealthPercent = (double) self.getStats().health() / self.getStats().maxHealth() * 100;
+
+        // Get strategic advice based on character type
+        String strategicAdvice = getStrategicAdvice(self.getType());
+
+        // Build the prompt with all necessary context
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("You are ").append(self.getName()).append(", a ").append(self.getType())
+            .append(" in a tactical RPG battle.\n\n");
+
+        // Current status
+        prompt.append("YOUR STATUS:\n");
+        prompt.append(String.format("- HP: %d/%d (%.0f%%)%n", 
+            self.getStats().health(), 
+            self.getStats().maxHealth(), 
+            selfHealthPercent));
+        prompt.append(String.format("- Mana: %d/%d%n", 
+            self.getStats().mana(), 
+            self.getStats().maxMana()));
+        prompt.append(String.format("- Attack Power: %d%n", self.getStats().attackPower()));
+        prompt.append(String.format("- Defense: %d%n", self.getStats().defense()));
+        prompt.append(String.format("- Current Round: %d, Turn: %d%n%n", 
+            gameState.roundNumber(), 
+            gameState.turnNumber()));
+
+        // Allies status
+        prompt.append("YOUR TEAM (ALLIES):\n");
+        prompt.append(formatCharacterList(allies));
+        prompt.append("\n");
+
+        // Enemies status
+        prompt.append("ENEMIES:\n");
+        prompt.append(formatCharacterList(enemies));
+        prompt.append("\n");
+
+        // Available actions
+        prompt.append("AVAILABLE ACTIONS:\n");
+        prompt.append("1. attack <enemy_name> - Estimated damage: ~").append(estimateDamage(self, getWeakestEnemy(enemies))).append("\n");
+        prompt.append("2. heal <ally_name> - Restores 30 HP to an ally\n\n");
+
+        // Strategic guidance
+        prompt.append("STRATEGIC GUIDANCE:\n");
+        prompt.append("- Focus fire: Attack the weakest enemy to eliminate threats\n");
+        prompt.append("- Protect team: Heal allies below 30% HP to prevent deaths\n");
+        prompt.append(strategicAdvice).append("\n\n");
+
+        // Valid target names
+        prompt.append("Valid enemy names: ");
+        for (int i = 0; i < enemies.size(); i++) {
+            if (i > 0) prompt.append(", ");
+            prompt.append(enemies.get(i).getName());
+        }
+        prompt.append("\n");
+
+        prompt.append("Valid ally names: ");
+        for (int i = 0; i < allies.size(); i++) {
+            if (i > 0) prompt.append(", ");
+            prompt.append(allies.get(i).getName());
+        }
+        prompt.append("\n\n");
+
+        // JSON response format specification
+        prompt.append("Respond ONLY with valid JSON (no markdown, no code blocks):\n");
+        prompt.append("{\n");
+        prompt.append("  \"action\": \"attack\" or \"heal\",\n");
+        prompt.append("  \"target\": \"exact character name\",\n");
+        prompt.append("  \"reasoning\": \"brief tactical explanation\"\n");
+        prompt.append("}");
+
+        return prompt.toString();
+    }
+
+    /**
+     * Get strategic advice specific to character type.
+     */
+    private String getStrategicAdvice(CharacterType type) {
+        return switch (type) {
+            case WARRIOR -> "- Tank role: Stay frontline and protect weaker allies\n- Use your high defense to absorb damage\n- Attack high-threat enemies to reduce team damage";
+            case MAGE -> "- Ranged role: Stay safe and deal high damage\n- Heal when your HP is low or teammates are critical\n- Focus on powerful enemies that threaten your team";
+            case ARCHER -> "- Ranged DPS: Stay back and focus damage\n- Attack enemies one by one to eliminate them\n- Heal teammates if they drop below 20% HP";
+            case ROGUE -> "- Agile attacker: Quick strikes on weak enemies\n- Focus on finishing wounded enemies quickly\n- Support team with healing when needed";
+        };
+    }
+
+    /**
+     * Find the weakest enemy (lowest HP).
+     */
+    private Character getWeakestEnemy(List<Character> enemies) {
+        return enemies.stream()
+            .min((c1, c2) -> Integer.compare(c1.getStats().health(), c2.getStats().health()))
+            .orElse(enemies.getFirst());
     }
 
     /**
